@@ -5,4 +5,8 @@ This is a little hobby project created and debugged with OpenAI 01-preview model
 If you want to try it out, just add the .zip file as a plugin in Wordpress.
 Your API key can be added in Settings > Straico Settings.
 
+On the Straico Generator page, just select a model, give it a prompt to write a post or page, select whether it should be a post or page, and give the post or page a title.  After a minute or so it will create that post or page, save it as a draft, and take you to the edit screen for it.
+
 This plugin includes Parsedown.php, from this project: https://github.com/erusev/parsedown -- Parsedown is released under the MIT license (same as this project).
+
+Post comments, suggestions, and discussion on the Straico Discord please: 
