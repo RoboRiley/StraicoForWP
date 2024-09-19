@@ -9,4 +9,4 @@ On the Straico Generator page, just select a model, give it a prompt to write a 
 
 This plugin includes Parsedown.php, from this project: https://github.com/erusev/parsedown -- Parsedown is released under the MIT license (same as this project).
 
-Post comments, suggestions, and discussion on the Straico Discord please: 
+Post comments, suggestions, and discussion on the Straico Discord please: https://discord.com/channels/1118690015443161130/1286458790316605450
