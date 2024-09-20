@@ -1,0 +1,1 @@
+Ok, I am testing this code that you created and it seems we need some error handling so that if the API returns a bad response or times out, the user gets a message with details about the issue.  Please add that where appropriate and advise me on what code to replace or add to which files.

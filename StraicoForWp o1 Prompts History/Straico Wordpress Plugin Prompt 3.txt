@@ -1,0 +1,312 @@
+# TASK
+Revise a Wordpress plugin to refine the user experience.
+1. Change the Dashboard menu listing from "Straico Content" to "Straico Generator."
+2. Include a message and animation that appears on screen after the user clicks the "Generate Content" button.  It should say something like "Requesting your new content from Straico... This may take a minute..." and have a looping text animation like three dots appearing in sequence. Eg "." then ".." then "..." then "." and so forth.  Or any kind of dynamic content that gives the user the appearance of the system working in the background.
+3. Convert any markup in the completion message that is received from the Straico API into Wordpress-compatible formatting when putting it into the next page or post.
+4. When a new page or post is succesfully created by the plugin, have it save the new page or post as a draft and immediately open the editor so that the user goes directly into the editor for that new page or post.
+
+# OUTPUT
+Provide clear and detailed directions on sections of the code to replace or revise to make these four changes. Provide complete and fully functioning code with all necessary instructions to implement it into the existing plugin.
+
+If you need clarification or any additional information, or you have any questions you need answered to complete this task, ask before proceeding.
+
+# EXISTING PLUGIN CODE.
+The plugin is comprised of four files:
+- straico-integration.php in the top-level plugin folder
+- admin-page.php in the includes folder
+- api-functions.php in the includes folder
+- settings-page.php in the includes folder
+The current code for each is below.
+
+## straico-integration.php
+```
+<?php
+/*
+Plugin Name: Straico Integration
+Description: Integrates Straico API to generate content for posts or pages.
+Version: 1.0
+Author: Your Name
+*/
+
+// Prevent direct access
+if ( !defined( 'ABSPATH' ) ) exit;
+
+// Define plugin constants
+define( 'STRAICO_INTEGRATION_VERSION', '1.0' );
+define( 'STRAICO_INTEGRATION_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+
+// Include necessary files
+require_once( STRAICO_INTEGRATION_PLUGIN_DIR . 'includes/admin-page.php' );
+require_once( STRAICO_INTEGRATION_PLUGIN_DIR . 'includes/api-functions.php' );
+require_once( STRAICO_INTEGRATION_PLUGIN_DIR . 'includes/settings-page.php' );
+
+?>
+```
+
+## admin-page.php
+```
+<?php
+
+add_action( 'admin_menu', 'straico_add_admin_page' );
+
+function straico_add_admin_page() {
+    add_menu_page(
+        'Straico Content Generator',
+        'Straico Content',
+        'edit_posts',
+        'straico-content-generator',
+        'straico_render_admin_page',
+        'dashicons-admin-page',
+        6
+    );
+}
+
+function straico_render_admin_page() {
+    // Ensure the user has entered an API key
+    $api_key = get_option( 'straico_api_key' );
+    if ( !$api_key ) {
+        echo '<div class="notice notice-error"><p>Please set your Straico API key in the <a href="options-general.php?page=straico-settings">settings page</a>.</p></div>';
+        return;
+    }
+
+    // Handle form submission
+    if ( isset( $_POST['straico_generate_content'] ) && check_admin_referer( 'straico_generate_content_nonce' ) ) {
+        $prompt = sanitize_textarea_field( $_POST['straico_prompt'] );
+        $model = sanitize_text_field( $_POST['straico_model'] );
+        $title = sanitize_text_field( $_POST['straico_post_title'] );
+        $post_type = sanitize_text_field( $_POST['straico_post_type'] );
+
+        // Call the API function to get the completion
+        $completion = straico_get_completion( $model, $prompt );
+
+        if ( is_wp_error( $completion ) ) {
+            $error_message = $completion->get_error_message();
+            echo '<div class="notice notice-error"><p>' . esc_html( $error_message ) . '</p></div>';
+        } elseif ( $completion && isset( $completion['content'] ) ) {
+            // Create a new post or page
+            $post_data = array(
+                'post_title'   => $title ? $title : 'Straico Generated Content',
+                'post_content' => $completion['content'],
+                'post_status'  => 'draft',
+                'post_author'  => get_current_user_id(),
+                'post_type'    => $post_type,
+            );
+
+            $post_id = wp_insert_post( $post_data );
+
+            if ( $post_id ) {
+                echo '<div class="notice notice-success"><p>Content generated successfully! <a href="' . get_edit_post_link( $post_id ) . '">Edit ' . ucfirst( $post_type ) . '</a></p></div>';
+            } else {
+                echo '<div class="notice notice-error"><p>Failed to create ' . ucfirst( $post_type ) . '.</p></div>';
+            }
+        } else {
+            echo '<div class="notice notice-error"><p>Failed to get a completion from Straico API.</p></div>';
+        }
+    }
+
+    // Get available models
+    $models = straico_get_models();
+
+    if ( is_wp_error( $models ) ) {
+        $error_message = $models->get_error_message();
+        echo '<div class="notice notice-error"><p>' . esc_html( $error_message ) . '</p></div>';
+        return; // Exit if models cannot be retrieved
+    }
+
+    ?>
+
+    <div class="wrap">
+        <h1>Straico Content Generator</h1>
+        <form method="post">
+            <?php wp_nonce_field( 'straico_generate_content_nonce' ); ?>
+            <table class="form-table">
+                <tr valign="top">
+                    <th scope="row">Prompt</th>
+                    <td>
+                        <textarea name="straico_prompt" rows="5" cols="80" required><?php echo isset( $_POST['straico_prompt'] ) ? esc_textarea( $_POST['straico_prompt'] ) : ''; ?></textarea>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Model</th>
+                    <td>
+                        <select name="straico_model" required>
+                            <?php foreach ( $models as $model_group ) : ?>
+                                <?php foreach ( $model_group as $model_option ) : ?>
+                                    <option value="<?php echo esc_attr( $model_option['model'] ); ?>" <?php selected( $model_option['model'], isset( $_POST['straico_model'] ) ? $_POST['straico_model'] : '' ); ?>>
+                                        <?php echo esc_html( $model_option['name'] ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Post Type</th>
+                    <td>
+                        <select name="straico_post_type">
+                            <option value="post" <?php selected( 'post', isset( $_POST['straico_post_type'] ) ? $_POST['straico_post_type'] : '' ); ?>>Post</option>
+                            <option value="page" <?php selected( 'page', isset( $_POST['straico_post_type'] ) ? $_POST['straico_post_type'] : '' ); ?>>Page</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <th scope="row">Title</th>
+                    <td>
+                        <input type="text" name="straico_post_title" size="50" value="<?php echo isset( $_POST['straico_post_title'] ) ? esc_attr( $_POST['straico_post_title'] ) : ''; ?>" />
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button( 'Generate Content', 'primary', 'straico_generate_content' ); ?>
+        </form>
+    </div>
+
+    <?php
+}
+```
+
+## api-functions.php
+```
+<?php
+
+function straico_get_models() {
+    $api_key = get_option( 'straico_api_key' );
+
+    // Check if API key is set
+    if ( empty( $api_key ) ) {
+        return new WP_Error( 'straico_api_error', 'API Key is missing. Please set your Straico API key in the settings.' );
+    }
+
+    $response = wp_remote_get( 'https://api.straico.com/v1/models', array(
+        'headers' => array(
+            'Authorization' => 'Bearer ' . $api_key,
+        ),
+        'timeout' => 30, // Set a timeout to handle timeouts gracefully
+    ) );
+
+    if ( is_wp_error( $response ) ) {
+        return new WP_Error( 'straico_api_error', 'Failed to connect to Straico API: ' . $response->get_error_message() );
+    }
+
+    $status_code = wp_remote_retrieve_response_code( $response );
+    $body = wp_remote_retrieve_body( $response );
+
+    if ( $status_code != 200 ) {
+        if ( $status_code == 401 ) {
+            return new WP_Error( 'straico_api_error', 'Unauthorized: Invalid API Key. Please check your Straico API key in the settings.' );
+        } else if ( $status_code == 429 ) {
+            return new WP_Error( 'straico_api_error', 'Too Many Requests: You have exceeded your rate limit.' );
+        } else {
+            return new WP_Error( 'straico_api_error', 'Straico API returned status code ' . $status_code . '. Response: ' . $body );
+        }
+    }
+
+    $data = json_decode( $body, true );
+
+    if ( isset( $data['data'] ) ) {
+        return $data['data'];
+    } else {
+        return new WP_Error( 'straico_api_error', 'Invalid response from Straico API.' );
+    }
+}
+
+function straico_get_completion( $model, $prompt ) {
+    $api_key = get_option( 'straico_api_key' );
+
+    // Check if API key is set
+    if ( empty( $api_key ) ) {
+        return new WP_Error( 'straico_api_error', 'API Key is missing. Please set your Straico API key in the settings.' );
+    }
+
+    $endpoint = 'https://api.straico.com/v1/prompt/completion';
+
+    $request_body = array(
+        'models' => array( $model ),
+        'message' => $prompt,
+    );
+
+    $response = wp_remote_post( $endpoint, array(
+        'headers' => array(
+            'Authorization' => 'Bearer ' . $api_key,
+            'Content-Type'  => 'application/json',
+        ),
+        'body' => wp_json_encode( $request_body ),
+        'timeout' => 60, // Set a timeout to handle timeouts gracefully
+    ) );
+
+    if ( is_wp_error( $response ) ) {
+        return new WP_Error( 'straico_api_error', 'Failed to connect to Straico API: ' . $response->get_error_message() );
+    }
+
+    $status_code = wp_remote_retrieve_response_code( $response );
+    $body = wp_remote_retrieve_body( $response );
+
+    if ( $status_code != 200 && $status_code != 201 ) {
+        if ( $status_code == 401 ) {
+            return new WP_Error( 'straico_api_error', 'Unauthorized: Invalid API Key. Please check your Straico API key in the settings.' );
+        } else if ( $status_code == 429 ) {
+            return new WP_Error( 'straico_api_error', 'Too Many Requests: You have exceeded your rate limit.' );
+        } else {
+            return new WP_Error( 'straico_api_error', 'Straico API returned status code ' . $status_code . '. Response: ' . $body );
+        }
+    }
+
+    $data = json_decode( $body, true );
+
+    if ( isset( $data['data']['completions'][ $model ]['completion']['choices'][0]['message']['content'] ) ) {
+        return array(
+            'content' => $data['data']['completions'][ $model ]['completion']['choices'][0]['message']['content'],
+        );
+    } else {
+        // Capture error messages from Straico API
+        if ( isset( $data['message'] ) ) {
+            return new WP_Error( 'straico_api_error', 'Straico API error: ' . $data['message'] );
+        } else {
+            return new WP_Error( 'straico_api_error', 'Invalid response from Straico API.' );
+        }
+    }
+}
+```
+
+## settings-page.php
+```
+<?php
+
+add_action( 'admin_menu', 'straico_add_settings_page' );
+add_action( 'admin_init', 'straico_register_settings' );
+
+function straico_add_settings_page() {
+    add_options_page(
+        'Straico Settings',
+        'Straico Settings',
+        'manage_options',
+        'straico-settings',
+        'straico_render_settings_page'
+    );
+}
+
+function straico_register_settings() {
+    register_setting( 'straico_settings_group', 'straico_api_key', 'sanitize_text_field' );
+}
+
+function straico_render_settings_page() {
+    ?>
+    <div class="wrap">
+        <h1>Straico Settings</h1>
+        <form method="post" action="options.php">
+            <?php
+                settings_fields( 'straico_settings_group' );
+                do_settings_sections( 'straico-settings' );
+                $api_key = get_option( 'straico_api_key' );
+            ?>
+            <table class="form-table">
+                <tr valign="top">
+                    <th scope="row">Straico API Key</th>
+                    <td><input type="password" name="straico_api_key" value="<?php echo esc_attr( $api_key ); ?>" size="50" /></td>
+                </tr>
+            </table>
+            <?php submit_button(); ?>
+        </form>
+    </div>
+    <?php
+}
+```
