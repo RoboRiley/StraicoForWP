@@ -2,7 +2,7 @@
 Revise a Wordpress plugin to refine the user experience.
 1. Change the Dashboard menu listing from "Straico Content" to "Straico Generator."
 2. Include a message and animation that appears on screen after the user clicks the "Generate Content" button.  It should say something like "Requesting your new content from Straico... This may take a minute..." and have a looping text animation like three dots appearing in sequence. Eg "." then ".." then "..." then "." and so forth.  Or any kind of dynamic content that gives the user the appearance of the system working in the background.
-3. Convert any markup in the completion message that is received from the Straico API into Wordpress-compatible formatting when putting it into the next page or post.
+3. Convert any markup in the completion message that is received from the Straico API into Wordpress-compatible formatting when putting it into the new page or post.
 4. When a new page or post is succesfully created by the plugin, have it save the new page or post as a draft and immediately open the editor so that the user goes directly into the editor for that new page or post.
 
 # OUTPUT
